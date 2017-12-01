@@ -5,10 +5,36 @@ from scipy import stats
 import cv2
 
 def main():
-    base_dir = '/Users/inabary/shuron/tilezval/h_2014-07859-12/hyper'
-    save_dir = './savetest2'
+    base_dir = '/home/bioinfo/ml/data/hyper_mutation/merged/not_hyper_mu'
+    save_dir = '/media/bioinfo/fatdata/tumor_tiles_zvalue/manual/non-hyper'
 
-    publish(base_dir, save_dir)
+    ENV = {
+        "use_tumor": False,
+    }
+
+    regx = re.compile(r'^\..+')
+    targets = [n for n in os.listdir(base_dir) if not regx.search(n)]
+
+    for t in targets:
+        _out = os.path.join(save_dir, t)
+        _source = os.path.join(base_dir, t)
+
+        if ENV["use_tumor"]:
+            _source = os.path.join(_source, "tumor")
+
+        if not os.path.exists(_out):
+            os.mkdir(_out)
+
+
+        if ENV["use_tumor"]:
+            _out = os.path.join(_out, "tumor")
+            if not os.path.exists(_out):
+                os.mkdir(_out)
+
+        print("{} -> {}".format(_source, _out))
+
+
+        publish(_source, _out)
 
 
 def publish(base_dir, save_dir):
@@ -16,17 +42,30 @@ def publish(base_dir, save_dir):
     imnames = [n for n in os.listdir(base_dir) if not regx.search(n)]
     imlen = len(imnames)
 
+    n_trashed = 0
     imgsheet = None
     for i, fn in enumerate(imnames):
         fn_path = os.path.join(base_dir, fn)
         if imgsheet is not None:
             im = cv2.imread(fn_path)
-            imgsheet = np.concatenate((imgsheet, im))
+            if im.shape != (300, 300, 3):
+                imlen -= 1
+                n_trashed += 1
+                continue
+
+            try:
+                imgsheet = np.concatenate((imgsheet, im))
+            except:
+                print("err")
+                return
         else:
             imgsheet = cv2.imread(fn_path)
 
         print('\r結合中…　{}/{}'.format(i + 1, imlen), end='')
     print("")
+
+    if n_trashed:
+        print("{} 枚のタイルがサイズ不備により削除された".format(n_trashed))
 
     imgsheet = np.reshape(imgsheet, (300 * 300 * imlen, 3))
 
@@ -46,7 +85,9 @@ def publish(base_dir, save_dir):
         print('\r保存しています…　{}/{}'.format(i + 1, imlen), end='')
         cv2.imwrite(os.path.join(save_dir, 'z-{}'.format(imnames[i])) ,zscored_picts[i])
 
+    print("")
     print('終了 {}'.format(base_dir))
+    print("")
 
 if __name__ == '__main__':
     main()
